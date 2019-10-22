@@ -51,13 +51,26 @@ function getIfSlideIsVisbile(
   return index >= currentSlide && index < currentSlide + slidesToShow;
 }
 
+function notEnoughChildren(
+  state: CarouselInternalState,
+  props: CarouselProps,
+  items?: number | undefined
+): boolean {
+  const childrenArr = React.Children.toArray(props.children);
+  const { slidesToShow } = state;
+  return items ? childrenArr.length < items : childrenArr.length < slidesToShow;
+}
+
 function getTransformForCenterMode(
   state: CarouselInternalState,
   props: CarouselProps,
   transformPlaceHolder?: number
 ) {
   const transform = transformPlaceHolder || state.transform;
-  if (state.currentSlide === 0 && !props.infinite) {
+  if (
+    notEnoughChildren(state, props) ||
+    (state.currentSlide === 0 && !props.infinite)
+  ) {
     return transform;
   } else {
     return transform + state.itemWidth / 2;
@@ -121,16 +134,6 @@ function getTransform(
     ? getTransformForCenterMode(state, props, transformPlaceHolder)
     : transform;
   return currentTransform;
-}
-
-function notEnoughChildren(
-  state: CarouselInternalState,
-  props: CarouselProps,
-  items?: number | undefined
-): boolean {
-  const childrenArr = React.Children.toArray(props.children);
-  const { slidesToShow } = state;
-  return items ? childrenArr.length < items : childrenArr.length < slidesToShow;
 }
 
 function getSlidesToSlide(

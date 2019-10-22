@@ -12,7 +12,7 @@ import {
   populateSlidesOnMouseTouchMove,
   isInLeftEnd,
   isInRightEnd,
-  getInitialSlideInInifteMode,
+  getInitialSlideInInfiniteMode,
   notEnoughChildren
 } from "./utils";
 import {
@@ -144,13 +144,32 @@ class Carousel extends React.Component<CarouselProps, CarouselInternalState> {
     }
   }
 
+  // we only use this when infinite mode is off
+  public resetTotalItems(): void {
+    const totalItems = React.Children.count(this.props.children);
+    const currentSlide = notEnoughChildren(this.state, this.props)
+      ? 0
+      : // this ensures that if the currentSlide before change in childrenCount is more than new childrenCount; we will set it to new childrenCount
+        Math.max(0, Math.min(this.state.currentSlide, totalItems));
+    this.setState(
+      {
+        totalItems,
+        currentSlide
+      },
+      () => {
+        this.setContainerAndItemWidth(this.state.slidesToShow, true);
+      }
+    );
+  }
+
   /*
   We only want to set the clones on the client-side cause it relies on getting the width of the carousel items.
   */
   public setClones(
     slidesToShow: number,
     itemWidth?: number,
-    forResizing?: boolean
+    forResizing?: boolean,
+    resetCurrentSlide = false
   ): void {
     // if forResizing is true, means we are on client-side.
     // if forResizing is false, means we are on server-side.
@@ -158,22 +177,24 @@ class Carousel extends React.Component<CarouselProps, CarouselInternalState> {
     // but still, we want to maintain the same position as it was on the server-side which is translateX(0) by getting the couter part of the original first slide.
     this.isAnimationAllowed = false;
     const childrenArr = React.Children.toArray(this.props.children);
-    const initialSlide = getInitialSlideInInifteMode(
+    const initialSlide = getInitialSlideInInfiniteMode(
       slidesToShow || this.state.slidesToShow,
       childrenArr
     );
     const clones = getClones(this.state.slidesToShow, childrenArr);
-    if (!notEnoughChildren(this.state, this.props, slidesToShow)) {
-      this.setState(
-        {
-          totalItems: clones.length,
-          currentSlide: forResizing ? this.state.currentSlide : initialSlide
-        },
-        () => {
-          this.correctItemsPosition(itemWidth || this.state.itemWidth);
-        }
-      );
-    }
+    const currentSlide = notEnoughChildren(this.state, this.props)
+      ? 0
+      : this.state.currentSlide;
+    this.setState(
+      {
+        totalItems: clones.length,
+        currentSlide:
+          forResizing && !resetCurrentSlide ? currentSlide : initialSlide
+      },
+      () => {
+        this.correctItemsPosition(itemWidth || this.state.itemWidth);
+      }
+    );
   }
   public setItemsToShow(shouldCorrectItemPosition?: boolean): void {
     const { responsive } = this.props;
@@ -255,7 +276,7 @@ class Carousel extends React.Component<CarouselProps, CarouselInternalState> {
     this.setItemsToShow(shouldCorrectItemPosition);
   }
   public componentDidUpdate(
-    { keyBoardControl, autoPlay }: CarouselProps,
+    { keyBoardControl, autoPlay, children }: CarouselProps,
     { containerWidth, domLoaded, currentSlide }: CarouselInternalState
   ): void {
     if (
@@ -283,7 +304,24 @@ class Carousel extends React.Component<CarouselProps, CarouselInternalState> {
     if (!autoPlay && this.props.autoPlay && !this.autoPlay) {
       this.autoPlay = setInterval(this.next, this.props.autoPlaySpeed);
     }
-    if (this.props.infinite && this.state.currentSlide !== currentSlide) {
+    if (children.length !== this.props.children.length) {
+      // this is for handling changing children only.
+      setTimeout(() => {
+        if (this.props.infinite) {
+          this.setClones(
+            this.state.slidesToShow,
+            this.state.itemWidth,
+            true,
+            true
+          );
+        } else {
+          this.resetTotalItems();
+        }
+      }, this.props.transitionDuration || defaultTransitionDuration);
+    } else if (
+      this.props.infinite &&
+      this.state.currentSlide !== currentSlide
+    ) {
       // this is to quickly cancel the animation and move the items position to create the infinite effects.
       this.correctClonesPosition({ domLoaded });
     }
